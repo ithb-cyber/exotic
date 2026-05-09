@@ -2,12 +2,17 @@ local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TweenService = game:GetService("TweenService")
 
+local EffectsFolder = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("VFX")
 local BagPart = ReplicatedStorage:WaitForChild("Assets"):WaitForChild("Models"):WaitForChild("Bag")
-local BagSpawn = workspace:WaitForChild("Contraption"):WaitForChild("Spawn")
+local Contraption = workspace:WaitForChild("Contraption")
+local BagSpawn = Contraption:WaitForChild("Spawn")
+local ClaimPart = Contraption:WaitForChild("Claim")
 local SettingsGui = script:WaitForChild("Settings")
 local SettingsScript = script.Parent:WaitForChild("UIHandler")
 
 local SETTINGS = require(ReplicatedStorage.Libraries.Settings)
+local MATERIALS = require(ReplicatedStorage.Libraries.Materials)
+
 local LocalSettings = {
 	["Interval"] = SETTINGS.Interval.Default,
 	["Effect"] = SETTINGS.Effect.Default,
@@ -15,20 +20,65 @@ local LocalSettings = {
 
 local SingularAuthorizedUser = nil
 
+local function ApplyRandomColorAndMaterial(BasePart: BasePart)
+	BasePart.Color = Color3.fromRGB(math.random(0, 255), math.random(0, 255), math.random(0, 255))
+	BasePart.Material = MATERIALS[math.random(1, #MATERIALS)]
+end
+
+local function Emit(Part)
+	for _, ParticleEmitter: ParticleEmitter in Part:GetDescendants() do
+		if ParticleEmitter:IsA("ParticleEmitter") then
+			task.wait()
+			ParticleEmitter:Emit(ParticleEmitter:GetAttribute("EmitCount") :: number? or 1)
+		end
+	end
+end
+
+local function SpawnVFX(Location: CFrame, EffectName: string)
+	local NewEffect = EffectsFolder:WaitForChild(EffectName):Clone()
+	NewEffect.CFrame = Location
+	NewEffect.Parent = workspace -- Could use a debris folder here
+
+	Emit(NewEffect)
+
+	task.wait(0.5)
+
+	NewEffect:Destroy()
+end
+
 local function SpawnBag()
-	local NewBag = BagPart:Clone()
+	local NewBag: BasePart = BagPart:Clone()
+	ApplyRandomColorAndMaterial(NewBag)
 	NewBag.CFrame = BagSpawn.CFrame
 	NewBag.Parent = workspace
+
+	local TargetCFrame = BagSpawn.CFrame - Vector3.new(0, 10, 0)
 
 	local SpawnEffect = TweenService:Create(
 		NewBag,
 		TweenInfo.new(LocalSettings.Effect, Enum.EasingStyle.Quint),
-		{ CFrame = BagSpawn.CFrame - Vector3.new(0, 10, 0) }
+		{ CFrame = TargetCFrame }
 	) --The bag is 3 studs tall, the spawn is 11 studs above the conveyor height.
+
+	task.spawn(SpawnVFX, TargetCFrame, "Landing")
 
 	SpawnEffect:Play()
 	SpawnEffect.Completed:Wait()
 	NewBag.Anchored = false
+
+	local TouchedConnection = nil
+
+	local function BagTouched(Hit: BasePart)
+		if Hit == ClaimPart then
+			TouchedConnection:Disconnect()
+
+			task.spawn(SpawnVFX, NewBag.CFrame, "Claimed")
+
+			NewBag:Destroy()
+		end
+	end
+
+	TouchedConnection = NewBag.Touched:Connect(BagTouched)
 end
 
 local function SettingUpdated(Player: Player, SettingName: string, Value: number)

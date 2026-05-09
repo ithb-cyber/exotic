@@ -13,6 +13,7 @@ local SettingsScript = script.Parent:WaitForChild("UIHandler")
 local SETTINGS = require(ReplicatedStorage.Libraries.Settings)
 local MATERIALS = require(ReplicatedStorage.Libraries.Materials)
 
+local BagTotal = 0
 local LocalSettings = {
 	["Interval"] = SETTINGS.Interval.Default,
 	["Effect"] = SETTINGS.Effect.Default,
@@ -47,7 +48,19 @@ local function SpawnVFX(Location: CFrame, EffectName: string)
 end
 
 local function SpawnBag()
+	BagTotal += 1
+	local BagID = "BAG_" .. BagTotal --Not sure what the purpose of the "ID" is so I don't know exactly how to format it
+
 	local NewBag: BasePart = BagPart:Clone()
+	local ClickDetector: ClickDetector = NewBag:WaitForChild("ClickDetector") :: ClickDetector
+
+	local function BagClicked(Player: Player)
+		print(BagID)
+		ReplicatedStorage.Remotes.BagID:FireClient(Player, BagID)
+	end
+
+	ClickDetector.MouseClick:Connect(BagClicked)
+
 	ApplyRandomColorAndMaterial(NewBag)
 	NewBag.CFrame = BagSpawn.CFrame
 	NewBag.Parent = workspace
@@ -117,6 +130,9 @@ end
 Players.PlayerAdded:Connect(PlayerAdded)
 Players.PlayerRemoving:Connect(PlayerRemoving)
 ReplicatedStorage.Remotes.Settings.OnServerEvent:Connect(SettingUpdated)
+
+SpawnBag()
+task.wait(LocalSettings.Interval)
 
 while true do
 	task.spawn(SpawnBag)
